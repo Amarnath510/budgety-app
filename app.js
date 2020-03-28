@@ -1,10 +1,8 @@
-// We will have 3 Modules
-// 1. BudgetController
-// 2. UIController
-// 3. Data Controller
+// We will have various Modules
 
 const INCOME_TYPE = 'inc';
 const EXPENSE_TYPE = 'exp';
+let transactionCounter = 0;
 
 function Transaction(id, amount, description) {
   this.id = id;
@@ -14,20 +12,31 @@ function Transaction(id, amount, description) {
 
 // Inheritance .. :)
 function IncomeTransaction(id, amount, description) {
-  Transaction.call(this, id, amount, description);
+  Transaction.call(this, id, amount, description); // This classical inheritance. But if there are any methods in "Transaction" then that won't be inherited.
+                                                   // Hence we need to use Object.create along with "call".
+                                                   // Refer: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/create
   // You can add any specific properties here
   this.type = INCOME_TYPE;
 }
+IncomeTransaction.prototype = Object.create(Transaction.prototype); // We also need to set constructor of IncomeTransaction to itself 
+                                                                    // else Object.create will make Transaction as default constructor
+IncomeTransaction.prototype.constructor = IncomeTransaction;
 
 function ExpenseTransaction(id, amount, description) { 
   Transaction.call(this, id, amount, description);
   this.type = EXPENSE_TYPE;
 }
+ExpenseTransaction.prototype = Object.create(Transaction.prototype);
+ExpenseTransaction.prototype.constructor = ExpenseTransaction;
 
 // Add specific methods
 // Remember, you can add inside "ExpenseTransaction" too but that will be expensive for each Object creation
 ExpenseTransaction.prototype.calculatePercentage = (total, totalExpenseAmount) => {
-  return (totalExpenseAmount / total).toFixed(2) * 100;
+  if (total === 0) {
+    return '-';
+  } else {
+    return (totalExpenseAmount / total).toFixed(2) * 100;
+  }
 }
 
 const budgetDataController = (() => {
@@ -47,6 +56,11 @@ const budgetDataController = (() => {
     return transactions;
   }
 
+  function deleteTransaction(id) {
+    const indexToBeDeleted = transactions.findIndex(trans => trans.id === id);
+    transactions.splice(indexToBeDeleted, 1);
+  }
+
   return {
     incomeTransaction: function(transaction) {
       return addToIncome(transaction);
@@ -56,6 +70,9 @@ const budgetDataController = (() => {
     },
     transactions: function() {
       return allTransactions();
+    },
+    deleteTransaction: (id) => {
+      return deleteTransaction(id);
     }
   };
 
@@ -85,9 +102,13 @@ const budgetService = (dataCtrl => {
     return amountByType;
   }
 
+  function deleteTransaction(id) {
+    return dataCtrl.deleteTransaction(id);
+  }
+
   return {
     addTransaction: function(type, amount, description) {
-      const id = getAllTransactions().length + 1;
+      const id = ++transactionCounter;
       if (type === INCOME_TYPE) {
         return addToIncomeEvent(new IncomeTransaction(id, amount, description));
       } else {
@@ -105,6 +126,9 @@ const budgetService = (dataCtrl => {
     },
     transactionsByType: function(type) {
       return filterTransactions(type);
+    },
+    deleteTransaction: (id) => {
+      return deleteTransaction(id);
     }
   };
 
@@ -126,10 +150,12 @@ var uiDomService = (() => {
   }
 
   function updateIncomeAndExpensesAmounts(totalIncomeAmount, totalExpenseAmount) {
-    setValueByClassName('budget__value', `+ ${totalIncomeAmount - totalExpenseAmount}`);
+    const totalAvailableBudget = totalIncomeAmount - totalExpenseAmount;
+    setValueByClassName('budget__value', `+ ${ totalAvailableBudget > 0 ? totalAvailableBudget : 0 }`);
     setValueByClassName('budget__income--value', `+ ${totalIncomeAmount}`);
     setValueByClassName('budget__expenses--value', `- ${totalExpenseAmount}`);
-    setValueByClassName('budget__expenses--percentage', `${(totalExpenseAmount / totalIncomeAmount).toFixed(2) * 100}%`);
+    const percentage = totalIncomeAmount !== 0 ? ((totalExpenseAmount / totalIncomeAmount).toFixed(2) * 100) : '-';
+    setValueByClassName('budget__expenses--percentage', `${percentage}%`);
   }
 
   function appendToIncomeTransaction(transaction) {
@@ -178,12 +204,20 @@ var uiDomService = (() => {
     elementByClassName('add__description').value = '';
   }
 
+  function deleteTransaction(transEleId) {
+    if (transEleId) {
+      const ancestorEle = document.querySelector(`#${transEleId}`).parentNode.parentNode;
+      ancestorEle.removeChild(document.querySelector(`#${transEleId}`).parentNode);
+    }
+  }
+
   return {
     getElementByClassName: function (className) { return elementByClassName(className); },
     getValueUsingClassName: className => { return elementValueByClassName(className); },
     setValueForElement: (className, value) => setValueByClassName(className, value),
-    updateIncomeExpenses: (incomeAmt, expenseAmt) => updateIncomeAndExpensesAmounts(incomeAmt, expenseAmt),
+    updateIncomeAndExpenses: (incomeAmt, expenseAmt) => updateIncomeAndExpensesAmounts(incomeAmt, expenseAmt),
     updateTransactions: (transaction, incomesTotal, expensesTotal) => updateTransactions(transaction, incomesTotal, expensesTotal),
+    deleteTransactionFromDom: (transEleId) => deleteTransaction(transEleId),
     clearInputFields: () => clearInputFields()
   }
 })();
@@ -205,18 +239,37 @@ const mainController = ((budgetSrv, uiDomSrv) => {
     }
   }
 
+  function deleteTransaction(event) {
+    const transEleId = event.target.parentNode.parentNode.parentNode.parentNode.id;
+    if (transEleId) {
+      uiDomSrv.deleteTransactionFromDom(transEleId);
+      budgetSrv.deleteTransaction(parseInt(transEleId.split('-')[1]), 10);
+      uiDomSrv.updateIncomeAndExpenses(budgetSrv.getIncomeAmount(), budgetSrv.getExpenseAmount());
+    }
+  }
+
   function updateAllObservers(type, amount, description) {
     const newTrans = budgetSrv.addTransaction(type, amount, description);
-    uiDomSrv.updateIncomeExpenses(budgetSrv.getIncomeAmount(), budgetSrv.getExpenseAmount());
+    uiDomSrv.updateIncomeAndExpenses(budgetSrv.getIncomeAmount(), budgetSrv.getExpenseAmount());
     uiDomSrv.updateTransactions(newTrans, budgetSrv.getIncomeAmount(), budgetSrv.getExpenseAmount());
   }
 
-  uiDomSrv.setValueForElement('budget__title--month', `March ${new Date().getFullYear()}`);
-  uiDomSrv.getElementByClassName('add__btn').addEventListener('click', () => submitUserData());
-  uiDomSrv.getElementByClassName('add__value').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-      submitUserData();
-    }
-  });
+  function init() {
+    uiDomSrv.setValueForElement('budget__title--month', `March ${new Date().getFullYear()}`);
+    uiDomSrv.getElementByClassName('add__btn').addEventListener('click', () => submitUserData());
+    uiDomSrv.getElementByClassName('add__value').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        submitUserData();
+      }
+    });
+    uiDomSrv.getElementByClassName('container').addEventListener('click', (event) => deleteTransaction(event));
+  }
+
+  return {
+    init: () => init()
+  }
 
 })(budgetService, uiDomService);
+
+// Starts from here
+mainController.init();
