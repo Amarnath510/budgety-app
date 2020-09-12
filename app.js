@@ -42,6 +42,7 @@ ExpenseTransaction.prototype.calculatePercentage = (total, totalExpenseAmount) =
 const budgetDataController = (() => {
   const transactions = [];
 
+  // private methods
   function addToIncome(transaction) {
     transactions.push(transaction);
     return transaction;
@@ -62,6 +63,7 @@ const budgetDataController = (() => {
   }
 
   return {
+    // public methods
     incomeTransaction: function(transaction) {
       return addToIncome(transaction);
     },
@@ -80,6 +82,7 @@ const budgetDataController = (() => {
 
 const budgetService = (dataCtrl => {
 
+  // private methods
   function addToIncomeEvent(transaction) {
     return dataCtrl.incomeTransaction(transaction);
   }
@@ -107,6 +110,7 @@ const budgetService = (dataCtrl => {
   }
 
   return {
+    // public methods
     addTransaction: function(type, amount, description) {
       const id = ++transactionCounter;
       if (type === INCOME_TYPE) {
@@ -136,7 +140,7 @@ const budgetService = (dataCtrl => {
 
 
 var uiDomService = (() => {
-
+  // private methods
   function elementByClassName(className) {
     return document.querySelector(`.${className}`);
   }
@@ -212,6 +216,7 @@ var uiDomService = (() => {
   }
 
   return {
+    // public methods
     getElementByClassName: function (className) { return elementByClassName(className); },
     getValueUsingClassName: className => { return elementValueByClassName(className); },
     setValueForElement: (className, value) => setValueByClassName(className, value),
@@ -225,6 +230,7 @@ var uiDomService = (() => {
 const mainController = ((budgetSrv, uiDomSrv) => {
   const VALID_OPTIONS = [ INCOME_TYPE, EXPENSE_TYPE ];
 
+  // private methods
   function submitUserData() {
     const selectOption = uiDomSrv.getValueUsingClassName('add__type');
     const amount = parseInt(uiDomSrv.getValueUsingClassName('add__value'), 10);
@@ -266,10 +272,11 @@ const mainController = ((budgetSrv, uiDomSrv) => {
   }
 
   return {
+    // public methods
     init: () => init()
   }
 
 })(budgetService, uiDomService);
 
-// Starts from here
+// Start from here
 mainController.init();
